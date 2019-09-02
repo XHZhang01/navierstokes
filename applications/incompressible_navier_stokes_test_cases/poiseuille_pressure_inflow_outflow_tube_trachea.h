@@ -10,9 +10,6 @@
 
 #include "../../include/incompressible_navier_stokes/postprocessor/postprocessor.h"
 #include "../../include/incompressible_navier_stokes/postprocessor/inflow_data_calculator.h"
-#include "../../include/incompressible_navier_stokes/postprocessor/line_plot_calculation_statistics.h"
-#include "../../include/incompressible_navier_stokes/postprocessor/mean_velocity_calculator.h"
-#include "../../include/functionalities/linear_interpolation.h"
 #include "../../include/functionalities/one_sided_cylindrical_manifold.h"
 #include "../grid_tools/dealii_extensions.h"
 
@@ -120,7 +117,7 @@ return p;
 unsigned int const DEGREE_MIN = 3;
 unsigned int const DEGREE_MAX = DEGREE_MIN;
 
-unsigned int const REFINE_SPACE_MIN = 1;
+unsigned int const REFINE_SPACE_MIN = 2;
 unsigned int const REFINE_SPACE_MAX = REFINE_SPACE_MIN;
 
 unsigned int const REFINE_TIME_MIN = 0;
@@ -138,12 +135,12 @@ unsigned int const DEGREE_U = DEGREE_MIN;
 unsigned int const REFINE_STEPS_SPACE = REFINE_SPACE_MIN + 1;
 
 // set the throat Reynolds number Re_throat = U_{mean,throat} * (2 R_throat) / nu
-double const RE = 3500; //500; //2000; //3500; //5000; //6500; //8000;
+double const RE = 8000; //500; //2000; //3500; //5000; //6500; //8000;
 
 // output folders
 std::string const OUTPUT_FOLDER = "output/poiseuille/Re8000/";
 std::string const OUTPUT_FOLDER_VTU = OUTPUT_FOLDER + "vtu/";
-std::string const OUTPUT_NAME = "3D_poiseuille_pressure_inflow_outflow_tube_trachea 3";
+std::string const OUTPUT_NAME = "3D_poiseuille_pressure_inflow_outflow_tube_trachea 6";
 
 // set problem specific parameters like physical dimensions, etc.
 const double MAX_VELOCITY = 15.09;
@@ -203,7 +200,7 @@ public:
   OutflowBoundary(types::boundary_id const id)
     :
       boundary_id(id),
-      resistance(5.93e5), // in preliminary tests with 5 generations we used a constant value of 1.0e7
+      resistance(3.5e5), // in preliminary tests with 5 generations we used a constant value of 1.0e7
       compliance(C_RS_KINEMATIC), // note that one could use a statistical distribution as in Roth et al. (2018)
       //volume(compliance * PEEP_KINEMATIC), // p = 1/C * V -> V = C * p (initialize volume so that p(t=0) = PEEP_KINEMATIC)
       volume(0.0),
@@ -253,10 +250,9 @@ private:
 
 // we need individual outflow boundary conditions for each outlet
 std::vector<std::shared_ptr<OutflowBoundary>> OUTFLOW_BOUNDARIES;
-//std::vector<std::shared_ptr<OutflowBoundary>> INFLOW_BOUNDARIES;
 
 // we need to compute the flow rate for each outlet
-std::map<types::boundary_id, double> FLOW_RATES;
+//std::map<types::boundary_id, double> FLOW_RATES;
 
 template<int dim>
 class PressureOutlet : public Function<dim>
@@ -333,7 +329,7 @@ void set_input_parameters(InputParameters &param)
   param.h_refinements = REFINE_STEPS_SPACE;
 
   // convective term
-  param.upwind_factor = 1.0;
+  param.upwind_factor = 0.5;
 
   // viscous term
   param.IP_formulation_viscous = InteriorPenaltyFormulation::SIPG;
@@ -693,17 +689,17 @@ void set_boundary_conditions(
   // 1 = inlet
   for(types::boundary_id id = INLET_ID_FIRST; id < INLET_ID_LAST; ++id)
   {
-    /*
-    std::shared_ptr<OutflowBoundary> inflow_boundary;
-    inflow_boundary.reset(new OutflowBoundary(id));
-    INFLOW_BOUNDARIES.push_back(inflow_boundary);
-    */
+
+    //std::shared_ptr<OutflowBoundary> inflow_boundary;
+    //inflow_boundary.reset(new OutflowBoundary(id));
+    //INFLOW_BOUNDARIES.push_back(inflow_boundary);
+
 
     boundary_descriptor_velocity->neumann_bc.insert(pair(id, new Functions::ZeroFunction<dim>(dim)));
     boundary_descriptor_pressure->dirichlet_bc.insert(pair(id, new PressureInflowBC<dim>()));
   }
 
-  // outlets
+  // 2 = outlet
   for(types::boundary_id id = OUTLET_ID_FIRST; id < OUTLET_ID_LAST; ++id)
   {
     std::shared_ptr<OutflowBoundary> outflow_boundary;
@@ -755,21 +751,31 @@ public:
   {
   }
 
+  unsigned int OUTFLOW_ID = 2;
+  unsigned int INFLOW_ID = 1;
+
   void setup(Operator const & pde_operator)
   {
     // call setup function of base class
     Base::setup(pde_operator);
 
     // fill flow_rates map
-    for(auto iterator = OUTFLOW_BOUNDARIES.begin(); iterator != OUTFLOW_BOUNDARIES.end(); ++iterator)
-    {
-      flow_rates.insert(std::pair<types::boundary_id, double>((*iterator)->get_boundary_id(),0.0));
-    }
+
+    flow_rates.insert(std::pair<types::boundary_id, double>(OUTFLOW_ID,0.0));
+
+    flow_rates.insert(std::pair<types::boundary_id, double>(INFLOW_ID,0.0));
 
     /*
-    for(auto iterator = INFLOW_BOUNDARIES.begin(); iterator != INFLOW_BOUNDARIES.end(); ++iterator)
+    for(auto iterator_out = OUTFLOW_BOUNDARIES.begin(); iterator_out != OUTFLOW_BOUNDARIES.end(); ++iterator_out)
     {
-      FLOW_RATES.insert(std::pair<types::boundary_id, double>((*iterator)->get_boundary_id(),0.0));
+      flow_rates.insert(std::pair<types::boundary_id, double>((*iterator_out)->get_boundary_id(),0.0));
+    }
+    */
+
+    /*
+    for(auto iterator_in = INFLOW_BOUNDARIES.begin(); iterator_in != INFLOW_BOUNDARIES.end(); ++iterator_in)
+    {
+      flow_rates.insert(std::pair<types::boundary_id, double>((*iterator_in)->get_boundary_id(),0.0));
     }
     */
 
@@ -800,35 +806,32 @@ public:
 
     // set flow rate for all outflow boundaries and update volume (i.e., integrate flow rate over time)
     Number volume = 0.0;
-    for(auto iterator = OUTFLOW_BOUNDARIES.begin(); iterator != OUTFLOW_BOUNDARIES.end(); ++iterator)
+
+    for(auto iterator_out = OUTFLOW_BOUNDARIES.begin(); iterator_out != OUTFLOW_BOUNDARIES.end(); ++iterator_out)
     {
-      (*iterator)->set_flow_rate(flow_rates.at((*iterator)->get_boundary_id()));
-      (*iterator)->integrate_volume(time);
-      volume += (*iterator)->get_volume();
+      (*iterator_out)->set_flow_rate(flow_rates.at((*iterator_out)->get_boundary_id()));
+      (*iterator_out)->integrate_volume(time);
+      volume += (*iterator_out)->get_volume();
     }
 
     /*
-    for(auto iterator = INFLOW_BOUNDARIES.begin(); iterator != INFLOW_BOUNDARIES.end(); ++iterator)
+    for(auto iterator_in = INFLOW_BOUNDARIES.begin(); iterator_in != INFLOW_BOUNDARIES.end(); ++iterator_in)
     {
-       (*iterator)->set_flow_rate(FLOW_RATES.at((*iterator)->get_boundary_id()));
-       (*iterator)->integrate_volume(time);
-       volume += (*iterator)->get_volume();
+       (*iterator_in)->set_flow_rate(flow_rates.at((*iterator_in)->get_boundary_id()));
+       (*iterator_in)->integrate_volume(time);
+       volume += (*iterator_in)->get_volume();
     }
     */
 
-    // write volume to file
-    if(pp_data_lung.flow_rate_data.write_to_file)
-    {
-      std::ostringstream filename;
-      filename << OUTPUT_FOLDER + OUTPUT_NAME + "_volume";
-      write_output(volume, time, "Volume in [m^3]", time_step_number, filename);
+    // write flow rates to file
 
-      // write time step size
-      std::ostringstream filename_dt;
-      filename_dt << OUTPUT_FOLDER + OUTPUT_NAME + "_time_step_size";
-      write_output(time-time_last, time, "Time step size in [s]", time_step_number, filename_dt);
-      time_last = time;
-    }
+    std::ostringstream filename_in;
+    filename_in << OUTPUT_FOLDER + OUTPUT_NAME + "_flow_rate_inflow";
+    write_output(flow_rates.at(INFLOW_ID), time, "Flow rate in [m^3/sec]", time_step_number, filename_in);
+
+    std::ostringstream filename_out;
+    filename_out << OUTPUT_FOLDER + OUTPUT_NAME + "_flow_rate_outflow";
+    write_output(flow_rates.at(OUTFLOW_ID), time, "Flow rate in [m^3/sec]", time_step_number, filename_out);
 
   }
 
@@ -886,12 +889,12 @@ construct_postprocessor(InputParameters const &param)
   pp_data.output_data.output_name = OUTPUT_NAME;
   pp_data.output_data.output_start_time = OUTPUT_START_TIME;
   pp_data.output_data.output_interval_time = OUTPUT_INTERVAL_TIME;
-  pp_data.output_data.write_vorticity = true;
-  pp_data.output_data.write_divergence = true;
+  pp_data.output_data.write_vorticity = false;
+  pp_data.output_data.write_divergence = false;
   pp_data.output_data.write_velocity_magnitude = true;
-  pp_data.output_data.write_vorticity_magnitude = true;
-  pp_data.output_data.write_q_criterion = true;
-  pp_data.output_data.write_processor_id = true;
+  pp_data.output_data.write_vorticity_magnitude = false;
+  pp_data.output_data.write_q_criterion = false;
+  pp_data.output_data.write_processor_id = false;
   pp_data.output_data.degree = param.degree_u;
   pp_data.output_data.write_higher_order = HIGH_ORDER_OUTPUT;
 
@@ -912,35 +915,4 @@ construct_postprocessor(InputParameters const &param)
 
 }
 
-namespace ConvDiff
-{
-
-/************************************************************************************************************/
-/*                                                                                                          */
-/*                                              POSTPROCESSOR                                               */
-/*                                                                                                          */
-/************************************************************************************************************/
-
-template<int dim, typename Number>
-std::shared_ptr<PostProcessorBase<dim, Number> >
-construct_postprocessor(ConvDiff::InputParameters const &param,
-                        unsigned int const              scalar_index)
-{
-  PostProcessorData<dim> pp_data;
-  pp_data.output_data.write_output = WRITE_OUTPUT;
-  pp_data.output_data.output_folder = OUTPUT_FOLDER_VTU;
-  pp_data.output_data.output_name = OUTPUT_NAME + "_scalar_" + std::to_string(scalar_index);
-  pp_data.output_data.output_start_time = OUTPUT_START_TIME;
-  pp_data.output_data.output_interval_time = OUTPUT_INTERVAL_TIME;
-  pp_data.output_data.degree = param.degree;
-  pp_data.output_data.write_higher_order = HIGH_ORDER_OUTPUT;
-
-  std::shared_ptr<PostProcessorBase<dim,Number> > pp;
-  pp.reset(new PostProcessor<dim,Number>(pp_data));
-
-  return pp;
-}
-
-}
-
-#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_TURBULENT_CHANNEL_H_ */
+#endif /* APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_POISEUILLE_H_ */
