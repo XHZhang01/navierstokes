@@ -316,17 +316,7 @@ void InputParameters<dim>::set_input_parameters()
   add_penalty_terms_to_monolithic_system = false;
 
   // PROJECTION METHODS
-  /*
-  // pressure Poisson equation
-  solver_pressure_poisson = SolverPressurePoisson::CG;
-  solver_data_pressure_poisson = SolverData(1000,1.e-12,1.e-3,100);
-  preconditioner_pressure_poisson = PreconditionerPressurePoisson::Multigrid;
 
-  // projection step
-  solver_projection = SolverProjection::CG;
-  solver_data_projection = SolverData(1000, 1.e-12, 1.e-3);
-  preconditioner_projection = PreconditionerProjection::InverseMassMatrix;
-  */
   // pressure Poisson equation
   solver_data_pressure_poisson = SolverData(1000,1.e-12,1.e-3,100);
   preconditioner_pressure_poisson = PreconditionerPressurePoisson::Multigrid;
@@ -413,6 +403,7 @@ void InputParameters<dim>::set_input_parameters()
   solver_info_data.print_to_screen = true;
   solver_info_data.interval_time = OUTPUT_INTERVAL_TIME;
 }
+
 
 /**************************************************************************************/
 /*                                                                                    */

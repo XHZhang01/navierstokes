@@ -457,7 +457,7 @@ void set_input_parameters(InputParameters &param, unsigned int const domain_id)
   param.preconditioner_pressure_block = SchurComplementPreconditioner::CahouetChabard; //PressureConvectionDiffusion;
   param.discretization_of_laplacian =  DiscretizationOfLaplacian::Classical;
 
-  // Chebyshev moother
+  // Chebyshev smoother
   param.multigrid_data_pressure_block.smoother_data.smoother = MultigridSmoother::Chebyshev;
   param.multigrid_data_pressure_block.coarse_problem.solver = MultigridCoarseGridSolver::Chebyshev;
 }

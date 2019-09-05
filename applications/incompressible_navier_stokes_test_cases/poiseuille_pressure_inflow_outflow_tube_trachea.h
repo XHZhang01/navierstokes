@@ -117,7 +117,7 @@ return p;
 unsigned int const DEGREE_MIN = 3;
 unsigned int const DEGREE_MAX = DEGREE_MIN;
 
-unsigned int const REFINE_SPACE_MIN = 2;
+unsigned int const REFINE_SPACE_MIN = 1;
 unsigned int const REFINE_SPACE_MAX = REFINE_SPACE_MIN;
 
 unsigned int const REFINE_TIME_MIN = 0;
