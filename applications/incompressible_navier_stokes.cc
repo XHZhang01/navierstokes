@@ -72,7 +72,9 @@ using namespace IncNS;
 //#include "incompressible_navier_stokes_test_cases/turbulent_channel.h"
 //#include "incompressible_navier_stokes_test_cases/periodic_hill.h"
 //#include "incompressible_navier_stokes_test_cases/fda_nozzle_benchmark.h"
+//#include "incompressible_navier_stokes_test_cases/3D_poiseuille_pressure_inflow_outflow.h"
 //#include "incompressible_navier_stokes_test_cases/poiseuille_pressure_inflow_outflow_tube_trachea.h"
+//#include "incompressible_navier_stokes_test_cases/3D_poiseuille_pressure_inflow_outflow_two_domains.h"
 
 // incompressible flow with scalar transport (but can also be used for pure fluid simulations)
 //#include "incompressible_flow_with_transport_test_cases/lung.h"
@@ -116,7 +118,7 @@ private:
 
   ConditionalOStream pcout;
 
-  std::shared_ptr<parallel::Triangulation<dim>> triangulation;
+  std::shared_ptr<parallel::TriangulationBase<dim>> triangulation;
   std::vector<GridTools::PeriodicFacePair<typename Triangulation<dim>::cell_iterator>>
     periodic_faces;
 

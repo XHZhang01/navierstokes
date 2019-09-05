@@ -26,7 +26,7 @@
 #include "../include/functionalities/dynamic_convergence_table.h"
 #include "../include/functionalities/measure_minimum_time.h"
 #include "../include/poisson/spatial_discretization/operator.h"
-#include "../include/solvers_and_preconditioners/smoother/chebyshev_smoother.h"
+#include "../include/solvers_and_preconditioners/multigrid/smoothers/chebyshev_smoother.h"
 #include "functionalities/print_functions.h"
 #include "functionalities/print_general_infos.h"
 
@@ -93,7 +93,7 @@ private:
   bool                                          use_pmg;
   bool                                          use_amg;
   bool                                          use_block;
-  std::shared_ptr<parallel::Triangulation<dim>> triangulation;
+  std::shared_ptr<parallel::TriangulationBase<dim>> triangulation;
   Poisson::InputParameters                      param;
 
   std::vector<GridTools::PeriodicFacePair<typename Triangulation<dim>::cell_iterator>>

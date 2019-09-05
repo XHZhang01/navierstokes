@@ -117,7 +117,7 @@ return p;
 unsigned int const DEGREE_MIN = 3;
 unsigned int const DEGREE_MAX = DEGREE_MIN;
 
-unsigned int const REFINE_SPACE_MIN = 1;
+unsigned int const REFINE_SPACE_MIN = 2;
 unsigned int const REFINE_SPACE_MAX = REFINE_SPACE_MIN;
 
 unsigned int const REFINE_TIME_MIN = 0;
@@ -140,7 +140,7 @@ double const RE = 8000; //500; //2000; //3500; //5000; //6500; //8000;
 // output folders
 std::string const OUTPUT_FOLDER = "output/poiseuille/Re8000/";
 std::string const OUTPUT_FOLDER_VTU = OUTPUT_FOLDER + "vtu/";
-std::string const OUTPUT_NAME = "3D_poiseuille_pressure_inflow_outflow_tube_trachea_d3r2n2";
+std::string const OUTPUT_NAME = "3D_poiseuille_pressure_inflow_outflow_tube_trachea_d3r2n2w9";
 
 // set problem specific parameters like physical dimensions, etc.
 const double MAX_VELOCITY = 15.09;
@@ -200,7 +200,7 @@ public:
   OutflowBoundary(types::boundary_id const id)
     :
       boundary_id(id),
-      resistance(3.5e5), // in preliminary tests with 5 generations we used a constant value of 1.0e7
+      resistance(9.31e5), // in preliminary tests with 5 generations we used a constant value of 1.0e7
       compliance(C_RS_KINEMATIC), // note that one could use a statistical distribution as in Roth et al. (2018)
       //volume(compliance * PEEP_KINEMATIC), // p = 1/C * V -> V = C * p (initialize volume so that p(t=0) = PEEP_KINEMATIC)
       volume(0.0),
@@ -356,9 +356,8 @@ void set_input_parameters(InputParameters &param)
   // pressure Poisson equation
   param.solver_data_pressure_poisson = SolverData(1000,1.e-12,1.e-3,100);
   param.preconditioner_pressure_poisson = PreconditionerPressurePoisson::Multigrid;
-  param.multigrid_data_pressure_poisson.type = MultigridType::phMG;
+  param.multigrid_data_pressure_poisson.type = MultigridType::cphMG;
   param.multigrid_data_pressure_poisson.p_sequence = PSequenceType::Bisect;
-  param.multigrid_data_pressure_poisson.dg_to_cg_transfer = DG_To_CG_Transfer::Fine;
 
   // Variant 1:
 
@@ -420,7 +419,7 @@ void set_input_parameters(InputParameters &param)
 
 template<int dim>
 void create_grid_and_set_boundary_ids(
-    std::shared_ptr<parallel::Triangulation<dim>>     triangulation,
+    std::shared_ptr<parallel::TriangulationBase<dim>>     triangulation,
     unsigned int const                                n_refine_space,
     std::vector<GridTools::PeriodicFacePair<typename
       Triangulation<dim>::cell_iterator> >            &/*periodic_faces*/)
@@ -623,6 +622,7 @@ public:
   double value (const Point<dim>   &p,
                   const unsigned int /*component = 0*/) const
   {
+    (void)p;
     /*
     double t = this->get_time();
 

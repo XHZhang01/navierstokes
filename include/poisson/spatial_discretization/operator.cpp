@@ -1,11 +1,13 @@
 #include "operator.h"
+#include "../../functionalities/calculate_maximum_aspect_ratio.h"
+#include "../../solvers_and_preconditioners/util/check_multigrid.h"
 #include "../preconditioner/multigrid_preconditioner.h"
 
 namespace Poisson
 {
 template<int dim, typename Number>
 DGOperator<dim, Number>::DGOperator(
-  parallel::Triangulation<dim> const &                      triangulation,
+  parallel::TriangulationBase<dim> const &                  triangulation,
   Poisson::InputParameters const &                          param_in,
   std::shared_ptr<ConvDiff::PostProcessorBase<dim, Number>> postprocessor_in)
   : dealii::Subscriptor(),
@@ -19,6 +21,14 @@ DGOperator<dim, Number>::DGOperator(
   if(param.mapping == MappingType::Affine)
   {
     mapping_degree = 1;
+  }
+  else if(param.mapping == MappingType::Quadratic)
+  {
+    mapping_degree = 2;
+  }
+  else if(param.mapping == MappingType::Cubic)
+  {
+    mapping_degree = 3;
   }
   else if(param.mapping == MappingType::Isoparametric)
   {
@@ -87,8 +97,9 @@ DGOperator<dim, Number>::setup_solver()
     std::shared_ptr<MULTIGRID> mg_preconditioner =
       std::dynamic_pointer_cast<MULTIGRID>(preconditioner);
 
-    parallel::Triangulation<dim> const * tria =
-      dynamic_cast<const parallel::Triangulation<dim> *>(&this->dof_handler.get_triangulation());
+    parallel::TriangulationBase<dim> const * tria =
+      dynamic_cast<const parallel::TriangulationBase<dim> *>(
+        &this->dof_handler.get_triangulation());
     const FiniteElement<dim> & fe = this->dof_handler.get_fe();
 
     mg_preconditioner->initialize(mg_data,
@@ -125,10 +136,28 @@ DGOperator<dim, Number>::setup_solver()
       new CGSolver<Poisson::LaplaceOperator<dim, Number>, PreconditionerBase<Number>, VectorType>(
         laplace_operator, *preconditioner, solver_data));
   }
+  else if(param.solver == Solver::FGMRES)
+  {
+    // initialize solver_data
+    FGMRESSolverData solver_data;
+    solver_data.solver_tolerance_abs        = param.solver_data.abs_tol;
+    solver_data.solver_tolerance_rel        = param.solver_data.rel_tol;
+    solver_data.max_iter                    = param.solver_data.max_iter;
+    solver_data.max_n_tmp_vectors           = param.solver_data.max_krylov_size;
+    solver_data.compute_performance_metrics = param.compute_performance_metrics;
+
+    if(param.preconditioner != Preconditioner::None)
+      solver_data.use_preconditioner = true;
+
+    // initialize solver
+    iterative_solver.reset(
+      new FGMRESSolver<Poisson::LaplaceOperator<dim, Number>,
+                       PreconditionerBase<Number>,
+                       VectorType>(laplace_operator, *preconditioner, solver_data));
+  }
   else
   {
-    AssertThrow(param.solver == Poisson::Solver::CG,
-                ExcMessage("Specified solver is not implemented!"));
+    AssertThrow(false, ExcMessage("Specified solver is not implemented!"));
   }
 
   pcout << std::endl << "... done!" << std::endl;
@@ -172,9 +201,30 @@ DGOperator<dim, Number>::rhs(VectorType & dst, double const time) const
 }
 
 template<int dim, typename Number>
+void
+DGOperator<dim, Number>::vmult(VectorType & dst, VectorType const & src) const
+{
+  laplace_operator.vmult(dst, src);
+}
+
+template<int dim, typename Number>
 unsigned int
 DGOperator<dim, Number>::solve(VectorType & sol, VectorType const & rhs) const
 {
+  // only activate if desired
+  if(false)
+  {
+    typedef Poisson::MultigridPreconditioner<dim, Number, MultigridNumber> MULTIGRID;
+
+    std::shared_ptr<MULTIGRID> mg_preconditioner =
+      std::dynamic_pointer_cast<MULTIGRID>(preconditioner);
+
+    CheckMultigrid<dim, Number, LaplaceOperator<dim, Number>, MULTIGRID, MultigridNumber>
+      check_multigrid(laplace_operator, mg_preconditioner);
+
+    check_multigrid.check();
+  }
+
   unsigned int iterations = iterative_solver->solve(sol, rhs, /* update_preconditioner = */ false);
 
   return iterations;
@@ -200,6 +250,53 @@ DGOperator<dim, Number>::get_number_of_dofs() const
 {
   return dof_handler.n_dofs();
 }
+
+template<int dim, typename Number>
+double
+DGOperator<dim, Number>::get_n10() const
+{
+  return iterative_solver->n10;
+}
+
+template<int dim, typename Number>
+double
+DGOperator<dim, Number>::get_average_convergence_rate() const
+{
+  return iterative_solver->rho;
+}
+
+template<int dim, typename Number>
+double
+DGOperator<dim, Number>::calculate_maximum_aspect_ratio() const
+{
+  return calculate_aspect_ratio_jacobian(matrix_free, dof_handler, *mapping);
+}
+
+#ifdef DEAL_II_WITH_TRILINOS
+template<int dim, typename Number>
+void
+DGOperator<dim, Number>::init_system_matrix(TrilinosWrappers::SparseMatrix & system_matrix) const
+{
+  laplace_operator.init_system_matrix(system_matrix);
+}
+
+template<int dim, typename Number>
+void
+DGOperator<dim, Number>::calculate_system_matrix(
+  TrilinosWrappers::SparseMatrix & system_matrix) const
+{
+  laplace_operator.calculate_system_matrix(system_matrix);
+}
+
+template<int dim, typename Number>
+void
+DGOperator<dim, Number>::vmult_matrix_based(VectorTypeDouble &                     dst,
+                                            TrilinosWrappers::SparseMatrix const & system_matrix,
+                                            VectorTypeDouble const &               src) const
+{
+  system_matrix.vmult(dst, src);
+}
+#endif
 
 template<int dim, typename Number>
 void
@@ -253,7 +350,7 @@ DGOperator<dim, Number>::initialize_matrix_free()
     if(param.enable_cell_based_face_loops)
     {
       auto tria =
-        dynamic_cast<parallel::Triangulation<dim> const *>(&dof_handler.get_triangulation());
+        dynamic_cast<parallel::TriangulationBase<dim> const *>(&dof_handler.get_triangulation());
       Categorization::do_cell_based_loops(*tria, additional_data);
     }
   }
