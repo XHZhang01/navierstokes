@@ -10,6 +10,7 @@
 #include <deal.II/distributed/tria.h>
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_tools.h>
+#include <deal.II/grid/manifold_lib.h>
 
 // CONVECTION-DIFFUSION
 
@@ -59,9 +60,9 @@ using namespace dealii;
 // specify the test case that has to be solved
 
 // template
-//#include "incompressible_flow_with_transport_test_cases/template.h"
+#include "incompressible_flow_with_transport_test_cases/template.h"
 
-#include "incompressible_flow_with_transport_test_cases/cavity.h"
+//#include "incompressible_flow_with_transport_test_cases/cavity.h"
 //#include "incompressible_flow_with_transport_test_cases/lung.h"
 
 template<typename Number>
@@ -127,7 +128,7 @@ private:
 
   ConditionalOStream pcout;
 
-  std::shared_ptr<parallel::Triangulation<dim>> triangulation;
+  std::shared_ptr<parallel::TriangulationBase<dim>> triangulation;
   std::vector<GridTools::PeriodicFacePair<typename Triangulation<dim>::cell_iterator>>
     periodic_faces;
 

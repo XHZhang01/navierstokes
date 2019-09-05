@@ -62,7 +62,7 @@ public:
 
   void
   initialize(MultigridData const &                data,
-             parallel::Triangulation<dim> const * tria,
+             parallel::TriangulationBase<dim> const * tria,
              FiniteElement<dim> const &           fe,
              Mapping<dim> const &                 mapping,
              bool const                           operator_is_singular = false,
@@ -108,7 +108,7 @@ protected:
   initialize_dof_handler_and_constraints(bool                                 is_singular,
                                          PeriodicFacePairs *                  periodic_face_pairs,
                                          FiniteElement<dim> const &           fe,
-                                         parallel::Triangulation<dim> const * tria,
+                                         parallel::TriangulationBase<dim> const * tria,
                                          Map const *                          dirichlet_bc);
 
   void
@@ -116,7 +116,7 @@ protected:
     bool                                                        is_singular,
     PeriodicFacePairs &                                         periodic_face_pairs,
     FiniteElement<dim> const &                                  fe,
-    parallel::Triangulation<dim> const *                        tria,
+    parallel::TriangulationBase<dim> const *                        tria,
     Map const &                                                 dirichlet_bc,
     std::vector<MGLevelInfo> &                                  level_info,
     std::vector<MGDoFHandlerIdentifier> &                       p_levels,
@@ -137,7 +137,6 @@ protected:
   MGLevelObject<std::shared_ptr<Operator>>                         operators;
   MGTransferMF_MGLevelObject<dim, VectorTypeMG>                    transfers;
 
-  std::vector<unsigned int>           h_levels;
   std::vector<MGDoFHandlerIdentifier> p_levels;
   std::vector<MGLevelInfo>            level_info;
   unsigned int                        n_levels;
@@ -145,11 +144,14 @@ protected:
   unsigned int                        fine_level;
 
 private:
+  bool
+  mg_transfer_to_continuous_elements() const;
+
   /*
    * Multigrid levels (i.e. coarsening strategy, h-/p-/hp-/ph-MG).
    */
   void
-  initialize_levels(parallel::Triangulation<dim> const * tria,
+  initialize_levels(parallel::TriangulationBase<dim> const * tria,
                     unsigned int const                   degree,
                     bool const                           is_dg);
 

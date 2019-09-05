@@ -8,7 +8,7 @@
 #ifndef APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_3D_TAYLOR_GREEN_VORTEX_H_
 #define APPLICATIONS_INCOMPRESSIBLE_NAVIER_STOKES_TEST_CASES_3D_TAYLOR_GREEN_VORTEX_H_
 
-#include "../grid_tools/deformed_cube_manifold.h"
+#include "../grid_tools/periodic_box.h"
 #include "../../include/incompressible_navier_stokes/postprocessor/postprocessor.h"
 
 /************************************************************************************************************/
@@ -72,8 +72,9 @@ void set_input_parameters(InputParameters &param)
   param.treatment_of_convective_term = TreatmentOfConvectiveTerm::Explicit; //Explicit; //Implicit;
   param.time_integrator_oif = TimeIntegratorOIF::ExplRK2Stage2;
   param.calculation_of_time_step_size = TimeStepCalculation::CFL;
+  param.adaptive_time_stepping = false;
   param.max_velocity = MAX_VELOCITY;
-  param.cfl_oif = 0.5; //0.2; //0.125;
+  param.cfl_oif = 0.45; //0.2; //0.125;
   param.cfl = param.cfl_oif * 1.0;
   param.cfl_exponent_fe_degree_velocity = 1.5;
   param.time_step_size = 1.0e-3; // 1.0e-4;
@@ -132,18 +133,22 @@ void set_input_parameters(InputParameters &param)
   // pressure Poisson equation
   param.solver_data_pressure_poisson = SolverData(1000,1.e-12,1.e-3,100);
   param.preconditioner_pressure_poisson = PreconditionerPressurePoisson::Multigrid;
-  param.multigrid_data_pressure_poisson.type = MultigridType::phMG;
-  param.multigrid_data_pressure_poisson.dg_to_cg_transfer = DG_To_CG_Transfer::Fine;
+  param.multigrid_data_pressure_poisson.type = MultigridType::cphMG;
   param.multigrid_data_pressure_poisson.coarse_problem.solver = MultigridCoarseGridSolver::Chebyshev;
   param.multigrid_data_pressure_poisson.coarse_problem.preconditioner = MultigridCoarseGridPreconditioner::PointJacobi;
 
   // projection step
   param.solver_projection = SolverProjection::CG;
-  param.solver_data_projection = SolverData(1000, 1.e-12, 1.e-6);
-  param.preconditioner_projection = PreconditionerProjection::InverseMassMatrix; //BlockJacobi;
+  param.solver_data_projection = SolverData(1000, 1.e-12, 1.e-3);
+  param.preconditioner_projection = PreconditionerProjection::InverseMassMatrix;
+  param.multigrid_data_projection.type = MultigridType::phMG;
+  param.multigrid_data_projection.smoother_data.smoother = MultigridSmoother::Chebyshev;
+  param.multigrid_data_projection.coarse_problem.solver = MultigridCoarseGridSolver::Chebyshev;
+  param.multigrid_data_projection.coarse_problem.preconditioner = MultigridCoarseGridPreconditioner::PointJacobi;
   param.preconditioner_block_diagonal_projection = Elementwise::Preconditioner::InverseMassMatrix;
   param.solver_data_block_diagonal_projection = SolverData(1000,1.e-12,1.e-2,1000);
-  param.update_preconditioner_projection = true;
+  param.update_preconditioner_projection = false;
+  param.update_preconditioner_projection_every_time_steps = 10;
 
   // HIGH-ORDER DUAL SPLITTING SCHEME
 
@@ -152,10 +157,11 @@ void set_input_parameters(InputParameters &param)
 
   // viscous step
   param.solver_viscous = SolverViscous::CG;
-  param.solver_data_viscous = SolverData(1000,1.e-12,1.e-6);
+  param.solver_data_viscous = SolverData(1000,1.e-12,1.e-3);
   param.preconditioner_viscous = PreconditionerViscous::InverseMassMatrix;
-  param.multigrid_data_viscous.smoother_data.smoother = MultigridSmoother::Jacobi;
-  param.multigrid_data_viscous.smoother_data.preconditioner = PreconditionerSmoother::BlockJacobi;
+  param.multigrid_data_viscous.type = MultigridType::cphMG;
+  param.multigrid_data_viscous.smoother_data.smoother = MultigridSmoother::Chebyshev; //Jacobi;
+  param.multigrid_data_viscous.smoother_data.preconditioner = PreconditionerSmoother::PointJacobi; //BlockJacobi;
   param.multigrid_data_viscous.smoother_data.relaxation_factor = 0.7;
   param.update_preconditioner_viscous = false;
 
@@ -195,7 +201,7 @@ void set_input_parameters(InputParameters &param)
   param.preconditioner_coupled = PreconditionerCoupled::BlockTriangular;
 
   // preconditioner velocity/momentum block
-  param.preconditioner_velocity_block = MomentumPreconditioner::Multigrid;
+  param.preconditioner_velocity_block = MomentumPreconditioner::InverseMassMatrix;
 
   // preconditioner Schur-complement block
   param.preconditioner_pressure_block = SchurComplementPreconditioner::CahouetChabard; //PressureConvectionDiffusion;
@@ -213,70 +219,37 @@ void set_input_parameters(InputParameters &param)
 
 template<int dim>
 void
-create_grid_and_set_boundary_ids(std::shared_ptr<parallel::Triangulation<dim>> triangulation,
+create_grid_and_set_boundary_ids(std::shared_ptr<parallel::TriangulationBase<dim>> triangulation,
                                  unsigned int const                            n_refine_space,
                                  std::vector<GridTools::PeriodicFacePair<typename
                                    Triangulation<dim>::cell_iterator> >        &periodic_faces)
 {
-  const double pi = numbers::PI;
-  const double left = - pi * L, right = pi * L;
-  std::vector<unsigned int> repetitions({N_CELLS_1D_COARSE_GRID,
-                                         N_CELLS_1D_COARSE_GRID,
-                                         N_CELLS_1D_COARSE_GRID});
+  double const pi = numbers::PI;
+  double const left = - pi * L, right = pi * L;
+  double const deformation = 0.5;
 
-  Point<dim> point1(left,left,left), point2(right,right,right);
-  GridGenerator::subdivided_hyper_rectangle(*triangulation,repetitions,point1,point2);
-
+  bool curvilinear_mesh = false;
   if(MESH_TYPE == MeshType::Cartesian)
   {
     // do nothing
   }
   else if(MESH_TYPE == MeshType::Curvilinear)
   {
-    AssertThrow(N_CELLS_1D_COARSE_GRID == 1,
-        ExcMessage("Only N_CELLS_1D_COARSE_GRID=1 possible for curvilinear grid."));
-
-    triangulation->set_all_manifold_ids(1);
-    double const deformation = 0.5;
-    unsigned int const frequency = 2;
-    static DeformedCubeManifold<dim> manifold(left, right, deformation, frequency);
-    triangulation->set_manifold(1, manifold);
+    curvilinear_mesh = true;
   }
-
-  AssertThrow(dim == 3, ExcMessage("This test case can only be used for dim==3!"));
-
-  typename Triangulation<dim>::cell_iterator cell = triangulation->begin(), endc = triangulation->end();
-  for(;cell!=endc;++cell)
+  else
   {
-   for(unsigned int face_number=0;face_number < GeometryInfo<dim>::faces_per_cell;++face_number)
-   {
-     // x-direction
-     if((std::fabs(cell->face(face_number)->center()(0) - left)< 1e-12))
-       cell->face(face_number)->set_all_boundary_ids (0);
-     else if((std::fabs(cell->face(face_number)->center()(0) - right)< 1e-12))
-       cell->face(face_number)->set_all_boundary_ids (1);
-     // y-direction
-     else if((std::fabs(cell->face(face_number)->center()(1) - left)< 1e-12))
-       cell->face(face_number)->set_all_boundary_ids (2);
-     else if((std::fabs(cell->face(face_number)->center()(1) - right)< 1e-12))
-       cell->face(face_number)->set_all_boundary_ids (3);
-     // z-direction
-     else if((std::fabs(cell->face(face_number)->center()(2) - left)< 1e-12))
-       cell->face(face_number)->set_all_boundary_ids (4);
-     else if((std::fabs(cell->face(face_number)->center()(2) - right)< 1e-12))
-       cell->face(face_number)->set_all_boundary_ids (5);
-   }
+    AssertThrow(false, ExcMessage("Not implemented."));
   }
 
-  auto tria = dynamic_cast<Triangulation<dim>*>(&*triangulation);
-  GridTools::collect_periodic_faces(*tria, 0, 1, 0 /*x-direction*/, periodic_faces);
-  GridTools::collect_periodic_faces(*tria, 2, 3, 1 /*y-direction*/, periodic_faces);
-  GridTools::collect_periodic_faces(*tria, 4, 5, 2 /*z-direction*/, periodic_faces);
-
-  triangulation->add_periodicity(periodic_faces);
-
-  // perform global refinements
-  triangulation->refine_global(n_refine_space);
+  create_periodic_box(triangulation,
+                      n_refine_space,
+                      periodic_faces,
+                      N_CELLS_1D_COARSE_GRID,
+                      left,
+                      right,
+                      curvilinear_mesh,
+                      deformation);
 }
 
 /************************************************************************************************************/

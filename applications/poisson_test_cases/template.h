@@ -41,7 +41,7 @@ set_input_parameters(InputParameters &param)
 
 template<int dim>
 void
-create_grid_and_set_boundary_ids(std::shared_ptr<parallel::Triangulation<dim>> triangulation,
+create_grid_and_set_boundary_ids(std::shared_ptr<parallel::TriangulationBase<dim>> triangulation,
                                  unsigned int const                            n_refine_space,
                                  std::vector<GridTools::PeriodicFacePair<typename
                                    Triangulation<dim>::cell_iterator> >         &periodic_faces)
@@ -111,8 +111,10 @@ set_field_functions(std::shared_ptr<FieldFunctions<dim>> field_functions)
 
 template<int dim, typename Number>
 std::shared_ptr<ConvDiff::PostProcessorBase<dim, Number> >
-construct_postprocessor()
+construct_postprocessor(Poisson::InputParameters const &param)
 {
+  (void)param;
+
   ConvDiff::PostProcessorData<dim> pp_data;
 
   std::shared_ptr<ConvDiff::PostProcessorBase<dim,Number> > pp;
