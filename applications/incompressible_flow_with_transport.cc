@@ -8,6 +8,7 @@
 // deal.II
 #include <deal.II/base/revision.h>
 #include <deal.II/distributed/tria.h>
+#include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_tools.h>
 
 // CONVECTION-DIFFUSION
