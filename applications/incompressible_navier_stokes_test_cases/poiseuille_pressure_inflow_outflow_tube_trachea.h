@@ -44,7 +44,7 @@ double *getdata ()
 
 // Declare a file variable and open the .asc file.
 ifstream file;
-file.open ("/scratch/zhang/workspace/navierstokes/applications/Patientendaten/cossmoothAtemwegsdruck.asc",ios::in);
+file.open ("/home/zhang/workspace/navierstokes/applications/Patientendaten/cossmoothAtemwegsdruck.asc",ios::in);
 /*
 if(!file)
 {
@@ -140,7 +140,7 @@ double const RE = 8000; //500; //2000; //3500; //5000; //6500; //8000;
 // output folders
 std::string const OUTPUT_FOLDER = "output/poiseuille/Re8000/";
 std::string const OUTPUT_FOLDER_VTU = OUTPUT_FOLDER + "vtu/";
-std::string const OUTPUT_NAME = "3D_poiseuille_pressure_inflow_outflow_tube_trachea 6";
+std::string const OUTPUT_NAME = "3D_poiseuille_pressure_inflow_outflow_tube_trachea_d3r2n2";
 
 // set problem specific parameters like physical dimensions, etc.
 const double MAX_VELOCITY = 15.09;
