@@ -51,7 +51,7 @@ void set_input_parameters(InputParameters &param)
 
   // PHYSICAL QUANTITIES
   param.start_time = 0.0;
-  param.end_time = 100.0;
+  param.end_time = 5.0;
   param.viscosity = VISCOSITY;
 
 
